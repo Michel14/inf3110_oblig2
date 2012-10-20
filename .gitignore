@@ -1,0 +1,14 @@
+# Latex files #
+*.aux
+*.log
+*.toc
+*.out
+*.dvi
+
+# Other files
+*.DS_Store # Apple-folder-config: http://en.wikipedia.org/wiki/.DS_Store
+
+# Emacs backup-files
+*~
+.\#*
+\#*
