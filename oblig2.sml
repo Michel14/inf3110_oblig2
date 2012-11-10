@@ -17,7 +17,7 @@ datatype program = Prog of grid * robot;
 
 datatype pen = Up | Down;
 type position = int*int;
-type board = unit;
+type board = string list;
 (* Bindings is functions to functions holding all variables and corresponding value *)
 type bindings = string -> int option;
 datatype state = State of board * pen * position * direction * bindings;
@@ -97,20 +97,44 @@ fun prettyPrint nil nil = nil
 						       if stmtList2 = nil then (print "}\n"; prettyPrint nil st)
 						       else (print "} else {\n"; prettyPrint nil stmtList2;
 							     print "}\n"; prettyPrint nil st))
-    | prettyPrint nil (Stop::st)                      = (print "Stop\n"; prettyPrint nil st);
+    | prettyPrint nil (PenUp::st)                  = (print "up\n"; prettyPrint nil st)
+    | prettyPrint nil (PenDown::st)                = (print "down\n"; prettyPrint nil st)
+    | prettyPrint nil (Stop::st)                   = (print "stop\n"; prettyPrint nil st);
+
+
+(* Returns (x,y) if they are inside grid, raises exception if not *)
+fun insideGrid (b::bs) (x,y) = if x < (size b) andalso x >= 0 andalso
+				  y < (length (b::bs)) andalso y >= 0
+			       then (x,y)
+			       else (print ("Outside grid: (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n"); raise Fail ("Outside grid: (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n"));
+
+(* handle Fail s => (print s; OS.Process.exit); *)
+
+fun makeColumns (0,col:string):string = col
+  | makeColumns (x,col:string):string = makeColumns(x-1,(col ^ "."));
+
+fun makeBoard (Size (x,0)) lst = lst
+  | makeBoard (Size (x,y)) lst = makeBoard (Size (x,y-1)) ((makeColumns(x,""))::lst);
+
+fun printBoard nil = nil
+    | printBoard (b::bs) = (print (b ^ "\n"); printBoard bs);
+
+(* Updates the board, where (x,y) is the new position, and (xO,yO) is the old) *)
+fun updateBoard (0,y) (xO, yO) (b::bs) = b::bs
+fun updateBoard (x,y) (xO, yO) (b::bs) = b::bs;
 
 (* Step takes a state and a list of statements. Execute the first statement, and obtain an intermediate state.
    If we need to continue (i.e. not STOP), then use intermediate state to interpret remaining statements.
    Interpret runs the whole program. TODO: when and how do we stop?
  *)
-fun interpret (Prog (gr,Rob (decls,stmts))) = ((prettyPrint decls stmts); step (initialState decls (State ((), Up, (0,0), N, fn _ => NONE))) stmts)
-and step state (Stop::_):state                  = state
+fun interpret (Prog (gr,Rob (decls,stmts))) = ((prettyPrint decls stmts); step (initialState decls (State ((makeBoard gr nil), Up, (0,0), N, fn _ => NONE))) stmts)
+and step (State (b,p,pos,dir,bs)) (Stop::_):state              = (printBoard b; (State (b,p,pos,dir,bs)))
 
   (* Base case used in "while loop" *)
   | step state nil = state
 
   (* Start *)
-  | step (State (b,p,pos,dir,bs)) (Start (Const x, Const y, newDir)::ss) = step (State (b,p,(x, y),newDir,bs)) ss
+  | step (State (b,p,pos,dir,bs)) (Start (Const x, Const y, newDir)::ss) = step (State ((updateBoard pos (0,0) b),p,(x, y),newDir,bs)) ss
 
   (* Forward *)
   | step (State (b,p,pos,dir,bs)) (Forward e::ss) = step (State (b,p,pos,dir,bs)) (Move e::ss)
@@ -126,8 +150,11 @@ and step state (Stop::_):state                  = state
 
   (* Move *)
   | step (State (b,p,pos,dir,bs)) (Move e::ss)  = let val v = eval bs e
-                                                     val s = State (b,p, calculatePos pos dir v, dir, bs)
-                                                 in step s ss end
+						      val newPos = calculatePos pos dir v
+                                                  in
+						      if p = Down then step (State ((updateBoard pos newPos b),p, (insideGrid b newPos), dir, bs)) ss
+						      else step (State (b,p, (insideGrid b newPos), dir, bs)) ss
+						  end
 
   (* Assignment *)
   | step s (Assignment var::ss) = step (initialState [var] s) ss
@@ -137,7 +164,7 @@ and step state (Stop::_):state                  = state
     if
 	(isTrueBoolean bs e)
     then
-	(* Calls the step again, with updated state *)
+	(* Calls step again, with updated state *)
 	step (step (State (b,p,pos,dir,bs)) stmtList) ((While (e, stmtList))::ss)
     else
 	step (State (b,p,pos,dir,bs)) ss
@@ -165,9 +192,9 @@ val elseStmt = [Forward (Const 4)];
 
 val p1 = [Stop];
 
-val p2 = [Start (Const 3, Const 9, N),
+val p2 = [Start (Const 15, Const 15, N),
 	  Forward (Const 3),
-	  Backward (Const 7),
+	  Backward (Const 3),
 	  Left (Ident "z"),
 	  Assignment (Var ("z", (Const 5))),
 	  Forward (Ident "z"),
@@ -181,17 +208,6 @@ val decls1 = [Var ("x", Const 10)
              ,Var ("z", Ident "y")];
 
 (*
-- val State (_,_,_,_,bs) = initialState decls1 (State ((), Up, (0,0), N, fn _ => NONE));
-val bs = fn : bindings
-- bs "x";
-val it = SOME 5 : int option
-- bs "y";
-
-uncaught exception Fail [Fail: not implemented yet]
-  raised at: m.sml:47.36-47.62
-*)
-
-(*
 val p = [Start (Const 23, Const 30, S)
         ,Forward (Const 15)
         ,PenUp
@@ -202,16 +218,15 @@ val p = [Start (Const 23, Const 30, S)
         , Stop];
 *)
 
-(*
 val pp = [Start (Const 23, Const 30, W)
         , Forward (Const 15)
         , PenDown
         , Left (Const 15)
-        , Right (Add (Const 2) (Const 3))
+        , Right (PlusExp ((Const 2), "+", (Const 3)))
         , PenUp
-        , Backward (Add (Const 10) (Const 27))
+        , Backward (PlusExp ((Const 10), "+", (Const 27)))
         , Stop];
-*)
 
 
-interpret (Prog (Size (12,12), Rob (decls1, p2)));
+
+interpret (Prog (Size (31,30), Rob (decls1, p2)));
