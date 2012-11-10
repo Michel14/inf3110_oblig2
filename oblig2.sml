@@ -125,7 +125,7 @@ fun dirToString N = "y"
   | dirToString E = "x"
   | dirToString W = "-x";
 
-fun varToString (Var (str, e)) = ("var " ^ str ^ " = " ^ (expToString e))
+fun varToString (Var (str, e)):string = ("var " ^ str ^ " = " ^ (expToString e));
 
 fun alterDir dir (Left e) = if dir = N then W else
 			      if dir = W then S else
@@ -135,46 +135,49 @@ fun alterDir dir (Left e) = if dir = N then W else
 			       if dir = S then W else N
   | alterDir dir (Backward e) = if dir = N then S else
 			       if dir = E then W else
-			       if dir = W then E else N
+			       if dir = W then E else N;
+
+fun prettyPrint nil nil = nil
+    | prettyPrint (d::ds) st                       = (print (varToString d ^ "\n"); prettyPrint ds st)
+    | prettyPrint nil (Forward e::st)              = (print ("forward(" ^ expToString e ^ ")\n"); prettyPrint nil st)
+    | prettyPrint nil (Backward e::st)             = (print ("backward(" ^ expToString e ^ ")\n"); prettyPrint nil st)
+    | prettyPrint nil (Left e::st)                 = (print ("left(" ^ expToString e ^ ")\n"); prettyPrint nil st)
+    | prettyPrint nil (Right e::st)                = (print ("right(" ^ expToString e ^ ")\n"); prettyPrint nil st)
+    | prettyPrint nil (Start (e1, e2, newDir)::st) = (print ("start(" ^ expToString e1 ^ "," ^ expToString e2 ^ ", " ^ dirToString newDir ^ ")\n"); prettyPrint nil st)
+    | prettyPrint nil (Assignment var::st)         = (print (varToString var ^ "\n"); prettyPrint nil st)
+    | prettyPrint nil (While (e, stmtList)::st)    = (print ("while (" ^ expToString e  ^ ") {\n");
+						      prettyPrint nil stmtList;
+						      print "}\n"; prettyPrint nil st)
+    | prettyPrint nil (IfThenElse (e, stmtList1, stmtList2)::st) =
+                                                      (print ("if (" ^ expToString e  ^ ") {\n");
+						       prettyPrint nil stmtList1;
+						       if stmtList2 = nil then (print "}\n"; prettyPrint nil st)
+						       else (print "} else {\n"; prettyPrint nil stmtList2; print "}\n"; prettyPrint nil st))
+    | prettyPrint nil (Stop::st)                      = (print "Stop\n"; prettyPrint nil st);
 
 (* Step takes a state and a list of statements. Execute the first statement, and obtain an intermediate state.
    If we need to continue (i.e. not STOP), then use intermediate state to interpret remaining statements.
    Interpret runs the whole program. TODO: when and how do we stop?
  *)
-fun interpret (Prog (gr,Rob (decls,stmts))) = step (initialState decls (State ((), Up, (0,0), N, fn _ => NONE))) stmts
+fun interpret (Prog (gr,Rob (decls,stmts))) = ((prettyPrint decls stmts); step (initialState decls (State ((), Up, (0,0), N, fn _ => NONE))) stmts)
 and step state (Stop::_):state                  = state
   | step state nil = state
   | step (State (b,p,pos,dir,bs)) (Start (e1, e2, newDir)::ss) =
-    (print ("start(" ^ expToString e1 ^ "," ^ expToString e2 ^ ", " ^ dirToString newDir ^ ")\n");
      let
 	 val newPos = updatePos(e1,e2)
 	 val s = State (b,p,newPos,newDir,bs)
      in
 	 step s ss
-     end)
+     end
 
-  | step (State (b,p,pos,dir,bs)) (Forward e::ss) =
-    (print ("forward(" ^ expToString e ^ ")\n"); print ("Pos: " ^ dirToString dir ^ posToString pos ^ "\n");
-     step (State (b,p,pos,dir,bs)) (Move e::ss))
-
-  | step (State (b,p,pos,dir,bs)) (Backward e::ss) =
-    (print ("backward(" ^ expToString e ^ ")\n"); print ("Pos: " ^ dirToString dir ^ posToString pos ^ "\n");
-     step (State (b,p, pos, alterDir dir (Backward e),bs)) (Move e::ss))
-
-  | step (State (b,p,pos,dir,bs)) (Left e::ss) =
-    (print ("left(" ^ expToString e ^ ")\n"); print ("Pos: " ^ dirToString dir ^ posToString pos ^ "\n");
-     step (State (b,p, pos, (alterDir dir (Left e)),bs)) (Move e::ss))
-
-  | step (State (b,p,pos,dir,bs)) (Right e::ss) =
-    (print ("right(" ^ expToString e ^ ")\n"); print ("Pos: " ^ dirToString dir ^ posToString pos ^ "\n");
-     step (State (b,p, pos, (alterDir dir (Right e)),bs)) (Move e::ss))
-
+  | step (State (b,p,pos,dir,bs)) (Forward e::ss) = step (State (b,p,pos,dir,bs)) (Move e::ss)
+  | step (State (b,p,pos,dir,bs)) (Backward e::ss) = step (State (b,p, pos, alterDir dir (Backward e),bs)) (Move e::ss)
+  | step (State (b,p,pos,dir,bs)) (Left e::ss) = step (State (b,p, pos, (alterDir dir (Left e)),bs)) (Move e::ss)
+  | step (State (b,p,pos,dir,bs)) (Right e::ss) = step (State (b,p, pos, (alterDir dir (Right e)),bs)) (Move e::ss)
   | step (State (b,p,pos,dir,bs)) (Move e::ss)  = let val v = eval bs e
                                                      val s = State (b,p, calculatePos pos dir v, dir, bs)
                                                  in step s ss end
-  | step s (Assignment var::ss) =
-    (print (varToString var ^ "\n");
-    step (initialState [var] s) ss)
+  | step s (Assignment var::ss) = step (initialState [var] s) ss
   | step (State (b,p,pos,dir,bs)) (While (e, stmtList)::ss) =
     if
 	(isTrueBoolean bs e)
@@ -193,16 +196,6 @@ and step state (Stop::_):state                  = state
 
   | step (State (b,_,pos,dir,bs)) (PenUp::ss)   = step (State (b,Up,pos,dir,bs)) ss
   | step (State (b,_,pos,dir,bs)) (PenDown::ss) = step (State (b,Down,pos,dir,bs)) ss;
-
-
-
-fun add(x1, x2) = x1 + x2;
-fun subtract(x1, x2) = x1 - x2;
-fun multiply(x1, x2) = x1 * x2;
-
-fun greater(x1, x2) = x1 > x2;
-fun lesser(x1, x2) = x1 < x2;
-fun equals(x1:int, x2:int) = x1 = x2;
 
 (* Example:
 
