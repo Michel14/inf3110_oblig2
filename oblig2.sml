@@ -55,19 +55,24 @@ fun calculatePos (x,y) N i = (x,y+i)
   | calculatePos (x,y) W i = (x-i,y);
 
 (** TO-STRING FUNCTIONS - return string from different types of statements **)
-fun expToString (Ident i) = i
-  | expToString (Const c) = Int.toString c
-  | expToString (PlusExp (e1, oper, e2)) = (expToString e1) ^ " " ^ oper ^ " " ^ (expToString e2)
-  | expToString (BooleanExp (e1, oper, e2)) = (expToString e1) ^ " " ^ oper ^ " " ^ (expToString e2);
+  fun expToString (Ident i) = i
+    | expToString (Const c) = Int.toString c
+    | expToString (PlusExp (e1, oper, e2)) = (expToString e1) ^ " " ^ oper ^ " " ^ (expToString e2)
+    | expToString (BooleanExp (e1, oper, e2)) = (expToString e1) ^ " " ^ oper ^ " " ^ (expToString e2);
 
-fun posToString (a, b) = ("(" ^ Int.toString a ^ ", " ^ Int.toString b ^ ")");
+  fun posToString (a, b) = ("(" ^ Int.toString a ^ ", " ^ Int.toString b ^ ")");
 
-fun dirToString N = "y"
-  | dirToString S = "-y"
-  | dirToString E = "x"
-  | dirToString W = "-x";
+  fun dirToString N = "y"
+    | dirToString S = "-y"
+    | dirToString E = "x"
+    | dirToString W = "-x";
 
-fun varToString (Var (str, e)):string = ("var " ^ str ^ " = " ^ (expToString e));
+  fun dirToChar N = #"^"
+    | dirToChar S = #"v"
+    | dirToChar E = #">"
+    | dirToChar W = #"<";
+
+  fun varToString (Var (str, e)):string = ("var " ^ str ^ " = " ^ (expToString e));
 
 (* Finds the new direction according to which way the robot is about to go *)
 fun alterDir dir (Left e) = if dir = N then W else
@@ -106,7 +111,9 @@ fun prettyPrint nil nil = nil
 fun insideGrid (b::bs) (x,y) = if x < (size b) andalso x >= 0 andalso
 				  y < (length (b::bs)) andalso y >= 0
 			       then (x,y)
-			       else (print ("Outside grid: (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n"); raise Fail ("Outside grid: (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n"));
+			       (* else (print ("Outside grid: (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n"); raise Fail ("Outside grid: (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n")); *)
+			       else
+				   (print ("\nERROR: outside grid (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n"); raise Fail "");
 
 (* handle Fail s => (print s; OS.Process.exit); *)
 
@@ -119,9 +126,30 @@ fun makeBoard (Size (x,0)) lst = lst
 fun printBoard nil = nil
     | printBoard (b::bs) = (print (b ^ "\n"); printBoard bs);
 
+(* Sets position in board with symbol "sym" at position (x,y) *)
+fun setPosInBoard (x,y) (b::bs) sym =
+    let
+	val yLength = length (b::bs)
+	val xLength = size b
+	fun setY (x,0) (b::bs) = ((implode (setX x (explode b)))::bs)
+	  | setY (x,y) (b::bs) = (b::(setY (x,y-1) bs)) and
+  	setX 0 (b::bs) = (sym::bs) (* Sets the symbol here *)
+	| setX x (b::bs) = (b::(setX (x-1) bs))
+    in
+	setY (x, yLength - (y+1)) (b::bs)
+    end;
+
 (* Updates the board, where (x,y) is the new position, and (xO,yO) is the old) *)
-fun updateBoard (0,y) (xO, yO) (b::bs) = b::bs
-fun updateBoard (x,y) (xO, yO) (b::bs) = b::bs;
+fun penDown (x,y) (xO, yO) b sym =
+    let
+	val xC = x-xO
+	val yC = y-yO
+	fun penD (0, 0) br = br
+	| penD (0, yC) br = if yC < 0 then penD (0, yC+1) (setPosInBoard (x,y-yC) br sym) else penD (0, yC-1) (setPosInBoard (x,y+yC) br sym)
+	| penD (xC, 0) br = if xC < 0 then penD (xC+1, 0) (setPosInBoard (x-xC,y) br sym) else penD (xC-1, 0) (setPosInBoard (x+xC,y) br sym)
+    in
+	penD (xC, yC) b
+    end;
 
 (* Step takes a state and a list of statements. Execute the first statement, and obtain an intermediate state.
    If we need to continue (i.e. not STOP), then use intermediate state to interpret remaining statements.
@@ -134,7 +162,8 @@ and step (State (b,p,pos,dir,bs)) (Stop::_):state              = (printBoard b; 
   | step state nil = state
 
   (* Start *)
-  | step (State (b,p,pos,dir,bs)) (Start (Const x, Const y, newDir)::ss) = step (State ((updateBoard pos (0,0) b),p,(x, y),newDir,bs)) ss
+  (* | step (State (b,p,pos,dir,bs)) (Start (Const x, Const y, newDir)::ss) = step (State ((updateBoard pos (0,0) b),p,(x, y),newDir,bs)) ss *)
+  | step (State (b,p,pos,dir,bs)) (Start (Const x, Const y, newDir)::ss) = step (State (b,p,(x, y),newDir,bs)) ss
 
   (* Forward *)
   | step (State (b,p,pos,dir,bs)) (Forward e::ss) = step (State (b,p,pos,dir,bs)) (Move e::ss)
@@ -152,7 +181,7 @@ and step (State (b,p,pos,dir,bs)) (Stop::_):state              = (printBoard b; 
   | step (State (b,p,pos,dir,bs)) (Move e::ss)  = let val v = eval bs e
 						      val newPos = calculatePos pos dir v
                                                   in
-						      if p = Down then step (State ((updateBoard pos newPos b),p, (insideGrid b newPos), dir, bs)) ss
+						      if p = Down then step (State ((penDown pos newPos b (dirToChar dir)),p, (insideGrid b newPos), dir, bs)) ss
 						      else step (State (b,p, (insideGrid b newPos), dir, bs)) ss
 						  end
 
@@ -184,15 +213,16 @@ and step (State (b,p,pos,dir,bs)) (Stop::_):state              = (printBoard b; 
 
 (* ############ *)
 (* RUN EXAMPLES *)
-
 val whileStmt = [Forward (Const 1), Assignment (Var ("z", PlusExp(Ident "z", "-", Const 1)))];
 
 val ifStmt = [Backward (Const 4)];
 val elseStmt = [Forward (Const 4)];
 
+
 val p1 = [Stop];
 
-val p2 = [Start (Const 15, Const 15, N),
+val p2 = [Start (Const 10, Const 10, N),
+	  PenDown,
 	  Forward (Const 3),
 	  Backward (Const 3),
 	  Left (Ident "z"),
@@ -228,5 +258,34 @@ val pp = [Start (Const 23, Const 30, W)
         , Stop];
 
 
+(* ### TESTING CODE 4 ### *)
 
-interpret (Prog (Size (31,30), Rob (decls1, p2)));
+val code4decls = [Var ("i", Const 5),
+		  Var ("j", Const 3)]
+
+val code4whileStmt = [Right (Ident "j"), Assignment (Var ("j", PlusExp(Ident "j", "-", Const 1)))];
+
+val code4ifStmt = [Forward (Const 14)];
+val code4elseStmt = [Backward (Const 14)];
+
+val code4 = [Start (Const 23, Const 6, W),
+             PenDown, (* Added *)
+             Forward (PlusExp(Const 3, "*", Ident "i")),
+             PenDown,
+             Right (Const 15),
+             Left (Const 4),
+	     (* PenUp, *)
+	     Backward (PlusExp(
+			    PlusExp (
+				(PlusExp (Const 2, "*", Ident "i")),
+				"+",
+				(PlusExp (Const 3, "*", Ident "j"))),
+			    "+",
+			    Const 5)),
+	     While (BooleanExp(Ident "j", ">", Const 0), whileStmt),
+	     IfThenElse(BooleanExp(Ident "i", ">", Const 3), ifStmt, elseStmt),
+	     Stop];
+
+
+
+interpret (Prog (Size (64,64), Rob (code4decls, code4)));
