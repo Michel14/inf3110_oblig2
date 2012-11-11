@@ -111,11 +111,8 @@ fun prettyPrint nil nil = nil
 fun insideGrid (b::bs) (x,y) = if x <= (size b) andalso x > 0 andalso
 				  y <= (length (b::bs)) andalso y > 0
 			       then (x,y)
-			       (* else (print ("Outside grid: (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n"); raise Fail ("Outside grid: (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n")); *)
 			       else
 				   (print ("\nERROR: outside grid (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n"); raise Fail "");
-
-(* handle Fail s => (print s; OS.Process.exit); *)
 
 fun makeColumns (0,col:string):string = col
   | makeColumns (x,col:string):string = makeColumns(x-1,(col ^ "."));
@@ -179,7 +176,6 @@ and step (State (b,p,pos,dir,bs)) (Stop::_):state              = (printBoard b; 
   | step state nil = state
 
   (* Start *)
-  (* | step (State (b,p,pos,dir,bs)) (Start (Const x, Const y, newDir)::ss) = step (State ((updateBoard pos (0,0) b),p,(x, y),newDir,bs)) ss *)
   | step (State (b,p,pos,dir,bs)) (Start (Const x, Const y, newDir)::ss) =
     step (State ((setPosInBoard (x,y) b (dirToChar newDir)),p,(x, y),newDir,bs)) ss
 

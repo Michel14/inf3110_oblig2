@@ -103,8 +103,9 @@ variable is updated with these steps.
 IfThenElse works without a else-statement, just pass a empty list.
 
 \subsection{Attempts to move robot outside the grid}
-When someone tries to move the robot outside the grid an exception is
-raised.
+When someone tries to move the robot outside the grid, a error-message
+is written and an exception is raised (which makes the program quit
+because it isn't handled).
 
 \subsection{<<Pretty print>>}
 I have made a function for pretty printing, this is called with all
