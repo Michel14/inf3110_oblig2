@@ -54,9 +54,72 @@
 
 \section{Implementation}
 
+\subsection{Symbols used in grid}
+I've used five different symbols inside the grid:
+\begin{itemize}
+  % I've used a little workaround here, i'm sorry for that.
+\item[] \textperiodcentered{} \hspace{2 mm} default, this means empty space
+\item[] < \hspace{2 mm} means \verb|-x|
+\item[] > \hspace{2 mm} means \verb|x|
+\item[] $\vee$ \hspace{2 mm} means \verb|-y|
+\item[] $\wedge$ \hspace{2 mm} means \verb|y|
+\end{itemize}
+When pen is down, all steps are recorded with the correct direction
+(depending on which way the robot was moving while recording).
 
+\subsubsection{Example of code and grid}
+
+\begin{verbatim}
+down
+start(2,3, x)
+forward(3)
+left(4)
+backward(1)
+right(2)
+stop
+\end{verbatim}
+
+\begin{verbatim}
+. . . . ^ . . . .
+. . < < v . . . .
+. . . . ^ . . . .
+. . . . ^ . . . .
+. > > > > . . . .
+. . . . . . . . .
+. . . . . . . . .
+\end{verbatim}
+
+\subsection{Coordinates }
+I start coordinates from 1 and up to the specified size. This means
+that if you specify a grid: \verb=size(5,5)=, coordinate $x=1,y=5$ is
+valid, but not $x=0,y=4$.
+
+\subsection{Pen-up/Pen-down}
+When command \verb=down= is used (\emph{Pen-Down}), all the steps the
+robot takes is stored in the first parameter of <<state>>, this
+variable is updated with these steps.
+
+\subsection{IfThenElse}
+IfThenElse works without a else-statement, just pass a empty list.
+
+\subsection{Attempts to move robot outside the grid}
+When someone tries to move the robot outside the grid an exception is
+raised.
 
 \subsection{<<Pretty print>>}
+I have made a function for pretty printing, this is called with all
+the statements before execution of statements.
+
+\section{TestPrograms}
+
+I've added test-programs for the example given above, <<Testing code
+1>> and <<Testing code 4>> (enabled as default)
+
+\section{How to run the program }
+You run the program by writing this in the terminal:
+\begin{verbatim}
+$ sml oblig2.sml
+\end{verbatim}
 
 \section{Get the code from GitHub}
 This program is out on GitHub, you can get it with this command

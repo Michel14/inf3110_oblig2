@@ -108,8 +108,8 @@ fun prettyPrint nil nil = nil
 
 
 (* Returns (x,y) if they are inside grid, raises exception if not *)
-fun insideGrid (b::bs) (x,y) = if x < (size b) andalso x >= 0 andalso
-				  y < (length (b::bs)) andalso y >= 0
+fun insideGrid (b::bs) (x,y) = if x <= (size b) andalso x > 0 andalso
+				  y <= (length (b::bs)) andalso y > 0
 			       then (x,y)
 			       (* else (print ("Outside grid: (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n"); raise Fail ("Outside grid: (" ^ (Int.toString x) ^ "," ^ (Int.toString y) ^ ")\n")); *)
 			       else
@@ -123,32 +123,49 @@ fun makeColumns (0,col:string):string = col
 fun makeBoard (Size (x,0)) lst = lst
   | makeBoard (Size (x,y)) lst = makeBoard (Size (x,y-1)) ((makeColumns(x,""))::lst);
 
+(* Prints one row in a board *)
+fun printRow nil = nil
+  | printRow (b::bs) = (print (Char.toString b ^ " "); printRow bs);
+
+(* Prints whole board *)
 fun printBoard nil = nil
-    | printBoard (b::bs) = (print (b ^ "\n"); printBoard bs);
+    | printBoard (b::bs) = (printRow (explode b); print "\n"; printBoard bs);
+
+fun printPos (x,y) dir = print ("Position is now: (" ^ Int.toString x ^ ", " ^ Int.toString y ^ ") " ^ dirToString dir ^ "\n\n");
 
 (* Sets position in board with symbol "sym" at position (x,y) *)
 fun setPosInBoard (x,y) (b::bs) sym =
     let
-	val yLength = length (b::bs)
+	val yLength = (length (b::bs))
 	val xLength = size b
+
+	(* Since retval from setX is a char list, I have to use implode to get the string value
+	 (and since setX expects char list, I have to use explode on the string "b") *)
 	fun setY (x,0) (b::bs) = ((implode (setX x (explode b)))::bs)
 	  | setY (x,y) (b::bs) = (b::(setY (x,y-1) bs)) and
   	setX 0 (b::bs) = (sym::bs) (* Sets the symbol here *)
 	| setX x (b::bs) = (b::(setX (x-1) bs))
     in
-	setY (x, yLength - (y+1)) (b::bs)
+	setY (x-1, yLength - y) (b::bs)
     end;
 
 (* Updates the board, where (x,y) is the new position, and (xO,yO) is the old) *)
 fun penDown (x,y) (xO, yO) b sym =
     let
-	val xC = x-xO
-	val yC = y-yO
-	fun penD (0, 0) br = br
-	| penD (0, yC) br = if yC < 0 then penD (0, yC+1) (setPosInBoard (x,y-yC) br sym) else penD (0, yC-1) (setPosInBoard (x,y+yC) br sym)
-	| penD (xC, 0) br = if xC < 0 then penD (xC+1, 0) (setPosInBoard (x-xC,y) br sym) else penD (xC-1, 0) (setPosInBoard (x+xC,y) br sym)
+	val xC = (x-xO)
+	val yC = (y-yO)
+
+	(* Recursive function for setting positions when going either backwards or downwards *)
+	fun penDNegative (0,0) br = br
+	  | penDNegative (0, yC) br = penDNegative (0, yC+1) (setPosInBoard (x, (y-yC)-1) br sym)
+	  | penDNegative (xC, 0) br = penDNegative (xC+1, 0) (setPosInBoard ((x-xC)-1, y) br sym)
+
+	(* Recursive function for setting positions when going either forwards or upwards *)
+	fun penDPositive (0, 0) br = br
+	  | penDPositive (0, yC) br = penDPositive (0, yC-1) (setPosInBoard (x, yO+yC) br sym)
+	  | penDPositive (xC, 0) br = penDPositive (xC-1, 0) (setPosInBoard (xO+xC, y) br sym)
     in
-	penD (xC, yC) b
+	if xC < 0 orelse yC < 0 then penDNegative (xC, yC) b else penDPositive (xC, yC) b
     end;
 
 (* Step takes a state and a list of statements. Execute the first statement, and obtain an intermediate state.
@@ -156,14 +173,15 @@ fun penDown (x,y) (xO, yO) b sym =
    Interpret runs the whole program. TODO: when and how do we stop?
  *)
 fun interpret (Prog (gr,Rob (decls,stmts))) = ((prettyPrint decls stmts); step (initialState decls (State ((makeBoard gr nil), Up, (0,0), N, fn _ => NONE))) stmts)
-and step (State (b,p,pos,dir,bs)) (Stop::_):state              = (printBoard b; (State (b,p,pos,dir,bs)))
+and step (State (b,p,pos,dir,bs)) (Stop::_):state              = (printBoard b; printPos pos dir; (State (b,p,pos,dir,bs)))
 
   (* Base case used in "while loop" *)
   | step state nil = state
 
   (* Start *)
   (* | step (State (b,p,pos,dir,bs)) (Start (Const x, Const y, newDir)::ss) = step (State ((updateBoard pos (0,0) b),p,(x, y),newDir,bs)) ss *)
-  | step (State (b,p,pos,dir,bs)) (Start (Const x, Const y, newDir)::ss) = step (State (b,p,(x, y),newDir,bs)) ss
+  | step (State (b,p,pos,dir,bs)) (Start (Const x, Const y, newDir)::ss) =
+    step (State ((setPosInBoard (x,y) b (dirToChar newDir)),p,(x, y),newDir,bs)) ss
 
   (* Forward *)
   | step (State (b,p,pos,dir,bs)) (Forward e::ss) = step (State (b,p,pos,dir,bs)) (Move e::ss)
@@ -181,7 +199,7 @@ and step (State (b,p,pos,dir,bs)) (Stop::_):state              = (printBoard b; 
   | step (State (b,p,pos,dir,bs)) (Move e::ss)  = let val v = eval bs e
 						      val newPos = calculatePos pos dir v
                                                   in
-						      if p = Down then step (State ((penDown pos newPos b (dirToChar dir)),p, (insideGrid b newPos), dir, bs)) ss
+						      if p = Down then step (State ((penDown newPos pos b (dirToChar dir)),p, (insideGrid b newPos), dir, bs)) ss
 						      else step (State (b,p, (insideGrid b newPos), dir, bs)) ss
 						  end
 
@@ -213,49 +231,57 @@ and step (State (b,p,pos,dir,bs)) (Stop::_):state              = (printBoard b; 
 
 (* ############ *)
 (* RUN EXAMPLES *)
-val whileStmt = [Forward (Const 1), Assignment (Var ("z", PlusExp(Ident "z", "-", Const 1)))];
 
-val ifStmt = [Backward (Const 4)];
-val elseStmt = [Forward (Const 4)];
+(* ### EXAMPLE GRID ### *)
+
+val exampleGrid = [PenDown,
+		   Start (Const 2, Const 3, E),
+		   Forward (Const 3),
+		   Left (Const 4),
+		   Backward (Const 1),
+		   Right (Const 2),
+		   Stop];
+
+(* interpret (Prog (Size (9,7), Rob ([], exampleGrid))); *)
+
+(* ### TESTING CODE 1 ### *)
+
+val code1 = [Start (Const 23, Const 30, W)
+            , Forward (Const 15)
+            , PenDown
+            , Left (Const 15)
+            , Right (PlusExp ((Const 2), "+", (Const 3)))
+            , PenUp
+            , Backward (PlusExp ((Const 10), "+", (Const 27)))
+            , Stop];
+
+(* interpret (Prog (Size (64,64), Rob ([], code1))); *)
 
 
-val p1 = [Stop];
+(* ### TESTING CODE 2 ### *)
 
-val p2 = [Start (Const 10, Const 10, N),
-	  PenDown,
-	  Forward (Const 3),
-	  Backward (Const 3),
-	  Left (Ident "z"),
-	  Assignment (Var ("z", (Const 5))),
-	  Forward (Ident "z"),
-	  Right (PlusExp (Const 7, "-", Const 9)),
-	  While (BooleanExp(Ident "z", ">", Const 0), whileStmt),
-	  IfThenElse(BooleanExp(Const 1, "=", Const 2), ifStmt, elseStmt),
-	  Stop];
+val code2decls = [Var ("i", Const 5),
+		  Var ("j", Const 3)]
 
-val decls1 = [Var ("x", Const 10)
-             ,Var ("y", Ident "x")
-             ,Var ("z", Ident "y")];
+val code2 = [Start (Const 23, Const 6, W),
+             PenDown, (* Added *)
+             Forward (PlusExp(Const 3, "*", Ident "i")),
+             PenDown,
+             Right (Const 15),
+             Left (Const 4),
+	     (* PenUp, *)
+	     Backward (PlusExp(
+			    PlusExp (
+				(PlusExp (Const 2, "*", Ident "i")),
+				"+",
+				(PlusExp (Const 3, "*", Ident "j"))),
+			    "+",
+			    Const 5)),
+	     Stop];
 
-(*
-val p = [Start (Const 23, Const 30, S)
-        ,Forward (Const 15)
-        ,PenUp
-        ,Left (Const 15)
-        , Right (Add (Const 2) (Const 3))
-        , PenDown
-        , Backward (Add (Const 10) (Const 27))
-        , Stop];
-*)
 
-val pp = [Start (Const 23, Const 30, W)
-        , Forward (Const 15)
-        , PenDown
-        , Left (Const 15)
-        , Right (PlusExp ((Const 2), "+", (Const 3)))
-        , PenUp
-        , Backward (PlusExp ((Const 10), "+", (Const 27)))
-        , Stop];
+
+(* interpret (Prog (Size (64,64), Rob (code2decls, code2))); *)
 
 
 (* ### TESTING CODE 4 ### *)
@@ -282,10 +308,8 @@ val code4 = [Start (Const 23, Const 6, W),
 				(PlusExp (Const 3, "*", Ident "j"))),
 			    "+",
 			    Const 5)),
-	     While (BooleanExp(Ident "j", ">", Const 0), whileStmt),
-	     IfThenElse(BooleanExp(Ident "i", ">", Const 3), ifStmt, elseStmt),
+	     While (BooleanExp(Ident "j", ">", Const 0), code4whileStmt),
+	     IfThenElse(BooleanExp(Ident "i", ">", Const 3), code4ifStmt, code4elseStmt),
 	     Stop];
-
-
 
 interpret (Prog (Size (64,64), Rob (code4decls, code4)));
