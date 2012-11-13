@@ -8,7 +8,7 @@ datatype stmt = Start of exp*exp*direction
               | PenUp | PenDown
               | Move of exp
 	      | Forward of exp | Backward of exp | Left of exp | Right of exp
-              | Assignment of decl
+              | Assignment of string * exp
 	      | IfThenElse of exp * stmt list * stmt list
 	      | While of exp * stmt list;
 datatype grid = Size of int * int;
@@ -92,7 +92,7 @@ fun prettyPrint indent nil nil = nil
   | prettyPrint indent nil (Left e::st)                 = (print (indent ^ "left(" ^ expToString e ^ ")\n"); prettyPrint indent nil st)
   | prettyPrint indent nil (Right e::st)                = (print (indent ^ "right(" ^ expToString e ^ ")\n"); prettyPrint indent nil st)
   | prettyPrint indent nil (Start (e1, e2, newDir)::st) = (print (indent ^ "start(" ^ expToString e1 ^ "," ^ expToString e2 ^ ", " ^ dirToString newDir ^ ")\n"); prettyPrint indent nil st)
-  | prettyPrint indent nil (Assignment var::st)         = (print (indent ^ varToString var ^ "\n"); prettyPrint indent nil st)
+  | prettyPrint indent nil (Assignment (str, e)::st)    = (print (indent ^ str ^ " = " ^ expToString e ^ "\n"); prettyPrint indent nil st)
   | prettyPrint indent nil (While (e, stmtList)::st)    = (print (indent ^ "while (" ^ expToString e  ^ ") {\n");
 							   prettyPrint "   " nil stmtList;
 							   print (indent ^ "}\n"); prettyPrint indent nil st)
@@ -200,7 +200,7 @@ and step (State (b,p,pos,dir,bs)) (Stop::_):state              = (printBoard b; 
 						  end
 
   (* Assignment *)
-  | step s (Assignment var::ss) = step (initialState [var] s) ss
+  | step s (Assignment (str, e)::ss) = step (initialState [Var (str, e)] s) ss
 
   (* While loop *)
   | step (State (b,p,pos,dir,bs)) (While (e, stmtList)::ss) =
@@ -285,7 +285,7 @@ val code2 = [Start (Const 23, Const 6, W),
 val code4decls = [Var ("i", Const 5),
 		  Var ("j", Const 3)]
 
-val code4whileStmt = [Right (Ident "j"), Assignment (Var ("j", PlusExp(Ident "j", "-", Const 1)))];
+val code4whileStmt = [Right (Ident "j"), Assignment ("j", PlusExp(Ident "j", "-", Const 1))];
 
 val code4ifStmt = [Forward (Const 14)];
 val code4elseStmt = [Backward (Const 14)];
