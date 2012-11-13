@@ -85,26 +85,26 @@ fun alterDir dir (Left e) = if dir = N then W else
 			       if dir = E then W else
 			       if dir = W then E else N;
 
-fun prettyPrint nil nil = nil
-    | prettyPrint (d::ds) st                       = (print (varToString d ^ "\n"); prettyPrint ds st)
-    | prettyPrint nil (Forward e::st)              = (print ("forward(" ^ expToString e ^ ")\n"); prettyPrint nil st)
-    | prettyPrint nil (Backward e::st)             = (print ("backward(" ^ expToString e ^ ")\n"); prettyPrint nil st)
-    | prettyPrint nil (Left e::st)                 = (print ("left(" ^ expToString e ^ ")\n"); prettyPrint nil st)
-    | prettyPrint nil (Right e::st)                = (print ("right(" ^ expToString e ^ ")\n"); prettyPrint nil st)
-    | prettyPrint nil (Start (e1, e2, newDir)::st) = (print ("start(" ^ expToString e1 ^ "," ^ expToString e2 ^ ", " ^ dirToString newDir ^ ")\n"); prettyPrint nil st)
-    | prettyPrint nil (Assignment var::st)         = (print (varToString var ^ "\n"); prettyPrint nil st)
-    | prettyPrint nil (While (e, stmtList)::st)    = (print ("while (" ^ expToString e  ^ ") {\n");
-						      prettyPrint nil stmtList;
-						      print "}\n"; prettyPrint nil st)
-    | prettyPrint nil (IfThenElse (e, stmtList1, stmtList2)::st) =
-                                                      (print ("if (" ^ expToString e  ^ ") {\n");
-						       prettyPrint nil stmtList1;
-						       if stmtList2 = nil then (print "}\n"; prettyPrint nil st)
-						       else (print "} else {\n"; prettyPrint nil stmtList2;
-							     print "}\n"; prettyPrint nil st))
-    | prettyPrint nil (PenUp::st)                  = (print "up\n"; prettyPrint nil st)
-    | prettyPrint nil (PenDown::st)                = (print "down\n"; prettyPrint nil st)
-    | prettyPrint nil (Stop::st)                   = (print "stop\n"; prettyPrint nil st);
+fun prettyPrint indent nil nil = nil
+  | prettyPrint indent (d::ds) st                       = (print (indent ^ varToString d ^ "\n"); prettyPrint indent ds st)
+  | prettyPrint indent nil (Forward e::st)              = (print (indent ^ "forward(" ^ expToString e ^ ")\n"); prettyPrint indent nil st)
+  | prettyPrint indent nil (Backward e::st)             = (print (indent ^ "backward(" ^ expToString e ^ ")\n"); prettyPrint indent nil st)
+  | prettyPrint indent nil (Left e::st)                 = (print (indent ^ "left(" ^ expToString e ^ ")\n"); prettyPrint indent nil st)
+  | prettyPrint indent nil (Right e::st)                = (print (indent ^ "right(" ^ expToString e ^ ")\n"); prettyPrint indent nil st)
+  | prettyPrint indent nil (Start (e1, e2, newDir)::st) = (print (indent ^ "start(" ^ expToString e1 ^ "," ^ expToString e2 ^ ", " ^ dirToString newDir ^ ")\n"); prettyPrint indent nil st)
+  | prettyPrint indent nil (Assignment var::st)         = (print (indent ^ varToString var ^ "\n"); prettyPrint indent nil st)
+  | prettyPrint indent nil (While (e, stmtList)::st)    = (print (indent ^ "while (" ^ expToString e  ^ ") {\n");
+							   prettyPrint "   " nil stmtList;
+							   print (indent ^ "}\n"); prettyPrint indent nil st)
+  | prettyPrint indent nil (IfThenElse (e, stmtList1, stmtList2)::st) =
+                                                           (print (indent ^ "if (" ^ expToString e  ^ ") {\n");
+							    prettyPrint "   " nil stmtList1;
+							    if stmtList2 = nil then (print (indent ^ "}\n"); prettyPrint indent nil st)
+							    else (print (indent ^ "} else {\n"); prettyPrint "   " nil stmtList2;
+								  print (indent ^ "}\n"); prettyPrint indent nil st))
+  | prettyPrint indent nil (PenUp::st)                  = (print (indent ^ "up\n"); prettyPrint indent nil st)
+  | prettyPrint indent nil (PenDown::st)                = (print (indent ^ "down\n"); prettyPrint indent nil st)
+  | prettyPrint indent nil (Stop::st)                   = (print (indent ^ "stop\n"); prettyPrint indent nil st);
 
 
 (* Returns (x,y) if they are inside grid, raises exception if not *)
@@ -169,7 +169,7 @@ fun penDown (x,y) (xO, yO) b sym =
    If we need to continue (i.e. not STOP), then use intermediate state to interpret remaining statements.
    Interpret runs the whole program. TODO: when and how do we stop?
  *)
-fun interpret (Prog (gr,Rob (decls,stmts))) = ((prettyPrint decls stmts); step (initialState decls (State ((makeBoard gr nil), Up, (0,0), N, fn _ => NONE))) stmts)
+fun interpret (Prog (gr,Rob (decls,stmts))) = ((prettyPrint "" decls stmts); step (initialState decls (State ((makeBoard gr nil), Up, (0,0), N, fn _ => NONE))) stmts)
 and step (State (b,p,pos,dir,bs)) (Stop::_):state              = (printBoard b; printPos pos dir; (State (b,p,pos,dir,bs)))
 
   (* Base case used in "while loop" *)
